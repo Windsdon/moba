@@ -9,11 +9,6 @@
 			"id": "image.logo.default",
 			"url": "res/images/logo.default.png",
 			"type": "image"
-		},
-		{
-			"id": "image.background_pattern",
-			"url": "res/images/background_pattern.png",
-			"type": "image"
 		}
 	]
 }

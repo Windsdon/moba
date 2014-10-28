@@ -3,16 +3,64 @@ var wengine = {
 
 	babel: false,
 
+	//resource: the localelist
 	Babel: function(resource){
+		this.languages = {};
 
+		this.selected = false;
+
+		this.languageCallback = function(resource){
+			this.languages[resource.id.match(/language.(.*)/)[1]] = resource.data;
+		};
+
+		this.getString = function(key){
+			if(!this.selected){
+				console.warn("No language selected!");
+				return "<missing>";
+			}
+			if(!this.languages[this.selected]){
+				console.warn("Language %s doesn't exist!", this.selected);
+				return "<missing>";
+			}
+			return this.getStringFromLang(key, this.selected);
+		};
+
+		this.getStringFromLang = function(key, lang){
+			var l = this.languages[lang];
+			if(!l[key]){
+				console.warn("Language %s doesn't define %s!", lang, key);
+				return "<missing>";
+			}
+
+			return l[key];
+		}
+
+		if(resource.loaded){
+			for(i in resource.data.locales){
+				var locale = resource.data.locales[i];
+				console.log("Found language: %s", locale.name);
+				if(locale["default"]){
+					this.selected = locale.code;
+				}
+				var res = new wengine.Resource(
+					"language." + locale.code,
+					"res/locale/strings/"+locale.code+".json",
+					"language"
+				);
+				res.callback = this.languageCallback;
+				res.context = this;
+				wengine.res.insert(res);
+				wengine.res.loadAll();
+			}
+		}
 	},
 
 	getString: function(key){
-		if(!babel){
+		if(!this.babel){
 			console.warn("No Babel object!");
 			return "<missing>";
 		}else{
-			return babel.getString(key);
+			return this.babel.getString(key);
 		}
 	},
 
@@ -30,7 +78,21 @@ var wengine = {
 		this.queueFile = function(resource, callback, context){
 			if(!callback){
 				var callback = false;
+				var context = false;
 			}
+
+			for(i in this.loadQueue){
+				if(this.loadQueue[i].res == resource){
+					return false;
+				}
+			}
+
+			for(i in this.loading){
+				if(this.loading[i].res == resource){
+					return false;
+				}
+			}
+
 			var file = {
 				res: resource,
 				callback: callback,
@@ -57,7 +119,7 @@ var wengine = {
 
 		// returns true if the file is already loaded
 		this.loadFile = function(file){
-			console.log("Loading file %O", file);
+			// console.log("Loading file %O", file);
 			if(file.res.loaded){
 				return true;
 			}
@@ -71,7 +133,7 @@ var wengine = {
 						context: file
 					},
 					function(e){
-						e.data.context.res.resource = $(this).attr("src");
+						e.data.context.res.data = $(this).attr("src");
 						e.data.context.success = true;
 						e.data.context.loader.onFileLoaded(e.data.context);
 					}
@@ -89,8 +151,9 @@ var wengine = {
 				$.ajax({
 					url: file.res.url,
 					context: file,
+					cache: false,
 					success: function(data){
-						this.res.resource = data;
+						this.res.data = data;
 					},
 					complete: function(a, status){
 						if(status != "success"){
@@ -115,10 +178,10 @@ var wengine = {
 		// procs callbacks and queues the next file
 		this.onFileLoaded = function(file){
 			if(file.success){
+				file.res.loaded = true;
 				if(file.callback){
 					file.callback.call(file.o, file.res);
 				}
-				file.res.loaded = true;
 				this.totalLoaded++;
 				this.loading.splice(this.loading.indexOf(file), 1);
 				this.loadNext();
@@ -157,7 +220,7 @@ var wengine = {
 	},
 
 	queueFile: function(resource, callback, context){
-		console.log("queueing: %O", resource);
+		// console.log("queueing: %O", resource);
 		if(!this.fileLoader){
 			console.error("File loader doesn't exist!");
 			return false;
@@ -171,6 +234,7 @@ var wengine = {
 
 	ResourceList: function(){
 		this.resources = {};
+		this.autoLoadLocale = false;
 
 		this.get = function(key){
 			if(typeof this.resources[key] == "undefined"){
@@ -193,11 +257,21 @@ var wengine = {
 
 		this.loadAll = function(){
 			for(i in this.resources){
-				if(this.resources[i].loaded){
+				var r = this.resources[i];
+				if(r.loaded){
 					continue;
 				}
-
-				wengine.queueFile(this.resources[i]);
+				if(this.autoLoadLocale && r.type == "localelist"){
+					wengine.queueFile(r, function(res){
+						wengine.babel = new wengine.Babel(res);
+					}, {});
+				}else{
+					if(r.callback){
+						wengine.queueFile(r, r.callback, r.context);
+					}else{
+						wengine.queueFile(r);
+					}
+				}
 			}
 			wengine.fileLoader.start();
 		};
@@ -206,6 +280,14 @@ var wengine = {
 			for(i in list){
 				var item = list[i];
 				this.insert(new wengine.Resource(item.id, item.url, item.type));
+			}
+		};
+
+		this.setAutoLoadLocale = function(b){
+			if(b){
+				this.autoLoadLocale = true;
+			}else{
+				this.autoLoadLocale = false;
 			}
 		}
 	},
@@ -222,8 +304,8 @@ var wengine = {
 		this.queueFile(
 			new wengine.Resource("resourcelist", url, "resourcelist"), 
 			function(resource){
-				console.log(resource);
-				this.res.addList(resource.resource.resources);
+				// console.log(resource);
+				this.res.addList(resource.data.resources);
 				this.res.loadAll();
 			},
 			this
@@ -235,7 +317,7 @@ var wengine = {
 		this.url = url;
 		this.type = type;
 		this.loaded = false;
-		this.resource = false;
+		this.data = false;
 	},
 
 
