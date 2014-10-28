@@ -1,4 +1,20 @@
 var wengine = {	
+
+	eventManager: false,
+
+	EventManager: function(){
+
+
+
+		this.register = function(id, callback, context){
+
+		};
+
+		this.trigger = function(id, data){
+
+		};
+	},
+
 	//////////////////////////////////
 
 	babel: false,
@@ -184,7 +200,11 @@ var wengine = {
 				}
 				this.totalLoaded++;
 				this.loading.splice(this.loading.indexOf(file), 1);
-				this.loadNext();
+				if(!this.loadNext()){
+					if(this.completeAction){
+						this.completeAction.callback.call(this.completeAction.o);
+					}
+				}
 				return true;
 			}else{
 				console.warn("Could not load file %s (Attempt %d)", file.res.url, file.attempts);
@@ -192,7 +212,7 @@ var wengine = {
 					console.warn("Giving up");
 					this.loading.splice(this.loading.indexOf(file), 1);
 					if(!this.loadNext()){
-						if(!!this.completeAction){
+						if(this.completeAction){
 							this.completeAction.callback.call(this.completeAction.o);
 						}
 					}
